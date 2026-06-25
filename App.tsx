@@ -7,14 +7,37 @@ import { Hero } from './components/Hero';
 import { InputArea } from './components/InputArea';
 import { LivePreview } from './components/LivePreview';
 import { CreationHistory, Creation } from './components/CreationHistory';
+import { InfoModal } from './components/InfoModal';
 import { bringToLife } from './services/gemini';
-import { ArrowUpTrayIcon } from '@heroicons/react/24/solid';
+import { ArrowUpTrayIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
+import GooglePayButton from '@google-pay/button-react';
+import { initAuth, googleSignIn, logout } from './lib/firebase';
+import { User } from 'firebase/auth';
+import { getUserCredits, deductCredit, addCredits } from './lib/credits';
 
 const App: React.FC = () => {
   const [activeCreation, setActiveCreation] = useState<Creation | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [history, setHistory] = useState<Creation[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [credits, setCredits] = useState<number | null>(null);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      async (loggedInUser) => {
+        setUser(loggedInUser);
+        const userCredits = await getUserCredits(loggedInUser.uid);
+        setCredits(userCredits);
+      },
+      () => {
+        setUser(null);
+        setCredits(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
 
   // Load history from local storage or fetch examples on mount
   useEffect(() => {
@@ -36,31 +59,6 @@ const App: React.FC = () => {
 
       if (loadedHistory.length > 0) {
         setHistory(loadedHistory);
-      } else {
-        // If no history (new user or cleared), load examples
-        try {
-           const exampleUrls = [
-               'https://storage.googleapis.com/sideprojects-asronline/bringanythingtolife/vibecode-blog.json',
-               'https://storage.googleapis.com/sideprojects-asronline/bringanythingtolife/cassette.json',
-               'https://storage.googleapis.com/sideprojects-asronline/bringanythingtolife/chess.json'
-           ];
-
-           const examples = await Promise.all(exampleUrls.map(async (url) => {
-               const res = await fetch(url);
-               if (!res.ok) return null;
-               const data = await res.json();
-               return {
-                   ...data,
-                   timestamp: new Date(data.timestamp || Date.now()),
-                   id: data.id || crypto.randomUUID()
-               };
-           }));
-           
-           const validExamples = examples.filter((e): e is Creation => e !== null);
-           setHistory(validExamples);
-        } catch (e) {
-            console.error("Failed to load examples", e);
-        }
       }
     };
 
@@ -97,11 +95,31 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async (promptText: string, file?: File) => {
+    if (!user) {
+      alert("Please sign in to start creating.");
+      googleSignIn();
+      return;
+    }
+
+    if (credits === null || credits <= 0) {
+      alert("You don't have enough credits! Please purchase more.");
+      return;
+    }
+
     setIsGenerating(true);
     // Clear active creation to show loading state
     setActiveCreation(null);
 
     try {
+      // Deduct credit first
+      const success = await deductCredit(user.uid);
+      if (!success) {
+        alert("Could not deduct credit. Please try again.");
+        setIsGenerating(false);
+        return;
+      }
+      setCredits(prev => (prev ? prev - 1 : 0));
+
       let imageBase64: string | undefined;
       let mimeType: string | undefined;
 
@@ -128,6 +146,11 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Failed to generate:", error);
       alert("Something went wrong while bringing your file to life. Please try again.");
+      // optionally refund credit if failed
+      if (user) {
+        await addCredits(user.uid, 1);
+        setCredits(prev => (prev !== null ? prev + 1 : 1));
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -187,8 +210,116 @@ const App: React.FC = () => {
 
   const isFocused = !!activeCreation || isGenerating;
 
+  const handlePaymentLoadPaymentData = async (paymentRequest: any) => {
+    console.log('load payment data', paymentRequest);
+    if (user) {
+      await addCredits(user.uid, 10);
+      setCredits(prev => (prev !== null ? prev + 10 : 10));
+      alert("Successfully purchased 10 credits!");
+    } else {
+      alert("Please sign in first.");
+    }
+  };
+
+  const handlePaymentError = (error: any) => {
+    console.error('pay error', error);
+  };
+
   return (
-    <div className="h-[100dvh] bg-zinc-950 bg-dot-grid text-zinc-50 selection:bg-blue-500/30 overflow-y-auto overflow-x-hidden relative flex flex-col">
+    <div className="h-[100dvh] bg-[#05050A] text-zinc-50 selection:bg-purple-500/30 overflow-y-auto overflow-x-hidden relative flex flex-col font-sans">
+      
+      {/* Background gradients for premium feel */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-purple-900/10 blur-[120px] rounded-full"></div>
+          <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-900/10 blur-[120px] rounded-full"></div>
+          <div className="absolute top-[20%] left-[20%] right-[20%] bottom-[20%] bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMiIvPjwvc3ZnPg==')] opacity-30 mix-blend-overlay"></div>
+      </div>
+
+      {/* Header / Nav */}
+      <div className={`w-full flex justify-between items-center px-6 py-4 absolute top-0 left-0 right-0 z-30 transition-opacity duration-700 ${isFocused ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <div className="text-2xl font-extrabold tracking-tighter text-white flex items-center gap-4">
+          <span>Nova<span className="text-purple-400">Forge</span></span>
+          <button 
+            onClick={() => setIsInfoModalOpen(true)}
+            className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-full transition-colors"
+            title="App Specifications & Info"
+          >
+            <InformationCircleIcon className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex items-center gap-4">
+          {user && (
+            <div className="bg-zinc-800/80 backdrop-blur-md border border-zinc-700/50 text-zinc-300 px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-2 shadow-lg shadow-black/50">
+              <span className="text-yellow-400">⚡</span>
+              <span>{credits !== null ? credits : '...'} Credits</span>
+            </div>
+          )}
+          <GooglePayButton
+            environment="TEST"
+            buttonColor="default"
+            buttonType="buy"
+            buttonSizeMode="fill"
+            paymentRequest={{
+              apiVersion: 2,
+              apiVersionMinor: 0,
+              allowedPaymentMethods: [
+                {
+                  type: 'CARD',
+                  parameters: {
+                    allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+                    allowedCardNetworks: ['MASTERCARD', 'VISA'],
+                  },
+                  tokenizationSpecification: {
+                    type: 'PAYMENT_GATEWAY',
+                    parameters: {
+                      gateway: 'example',
+                      gatewayMerchantId: 'exampleGatewayMerchantId',
+                    },
+                  },
+                },
+              ],
+              merchantInfo: {
+                merchantId: '12345678901234567890',
+                merchantName: 'Demo Merchant',
+              },
+              transactionInfo: {
+                totalPriceStatus: 'FINAL',
+                totalPriceLabel: 'Total',
+                totalPrice: '10.00',
+                currencyCode: 'USD',
+                countryCode: 'US',
+              },
+            }}
+            onLoadPaymentData={handlePaymentLoadPaymentData}
+            onError={handlePaymentError}
+          />
+
+          {!user ? (
+            <button
+              onClick={() => googleSignIn()}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-zinc-100 text-zinc-900 rounded-md hover:bg-white transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Sign in
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-zinc-400 hidden sm:block">{user.email}</span>
+              <button
+                onClick={() => logout()}
+                className="px-3 py-1.5 text-sm font-medium border border-zinc-700 hover:bg-zinc-800 rounded-md transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
       
       {/* Centered Content Container */}
       <div 
@@ -259,6 +390,8 @@ const App: React.FC = () => {
             className="hidden" 
         />
       </div>
+
+      <InfoModal isOpen={isInfoModalOpen} onClose={() => setIsInfoModalOpen(false)} />
     </div>
   );
 };

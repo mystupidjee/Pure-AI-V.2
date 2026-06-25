@@ -147,13 +147,20 @@ export const Hero: React.FC = () => {
       </div>
 
       {/* Hero Text Content */}
-      <div className="text-center relative z-10 max-w-6xl mx-auto px-4 pt-8">
-        <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tighter text-white mb-6 leading-[1.1]">
+      <div className="text-center relative z-10 max-w-6xl mx-auto px-4 pt-16 lg:pt-24 mt-16">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900/50 border border-zinc-800 text-xs sm:text-sm text-zinc-400 mb-8 backdrop-blur-sm shadow-xl shadow-purple-900/10">
+          <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+          Gemini 3 Pro Powered
+        </div>
+        <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-[7.5rem] font-black tracking-tighter text-white mb-8 leading-[1.05]">
           Bring anything <br/>
-          to <span className="underline decoration-4 decoration-blue-500 underline-offset-4 md:underline-offset-8 text-white">life</span>.
+          to <span className="text-blue-400 drop-shadow-[0_0_15px_rgba(59,130,246,0.3)]">life</span>.
         </h1>
-        <p className="text-base sm:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed font-light">
-          Gemini sees the code in everything. Drop in an old map, a floor plan, a diagram, or a doodle, and watch it turn into a working interactive experience instantly.
+        <p className="text-lg sm:text-2xl text-zinc-400 max-w-3xl mx-auto leading-relaxed font-light mb-8">
+          NovaForge uses advanced AI to see the code in everything. Drop in an old map, a floor plan, a diagram, or a doodle, and watch it turn into a working interactive experience instantly.
+        </p>
+        <p className="text-sm text-zinc-500 font-mono tracking-wide uppercase">
+          Created by <a href="https://g.dev/natv" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors hover:underline">g.dev/natv</a>
         </p>
       </div>
     </>

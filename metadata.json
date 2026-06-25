@@ -1,6 +1,8 @@
 {
   "name": "Remix: Bring Any Idea to Life",
-  "description": "ambil dari ai studio saya proyek ID nya : pureai-499303",
+  "description": "Integrated Google Pay, Google Workspace (Docs export, Drive), and Firebase authentication.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useEffect, useState, useRef } from 'react';
-import { ArrowDownTrayIcon, PlusIcon, ViewColumnsIcon, DocumentIcon, CodeBracketIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, PlusIcon, ViewColumnsIcon, DocumentIcon, CodeBracketIcon, XMarkIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import { Creation } from './CreationHistory';
+import { getAccessToken } from '../lib/firebase';
 
 interface LivePreviewProps {
   creation: Creation | null;
@@ -149,6 +150,90 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ creation, isLoading, i
         URL.revokeObjectURL(url);
     };
 
+    const exportToGoogleDocs = async () => {
+        if (!creation) return;
+        const token = await getAccessToken();
+        if (!token) {
+            alert("Please sign in to Google to export to Docs/Drive.");
+            return;
+        }
+
+        const confirmed = window.confirm("Are you sure you want to export this to Google Docs?");
+        if (!confirmed) return;
+
+        try {
+            const metadata = {
+                name: creation.name + ' - Export',
+                mimeType: 'application/vnd.google-apps.document'
+            };
+            
+            const fileContent = new Blob([creation.html], {type: 'text/html'});
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
+            form.append('file', fileContent);
+            
+            const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: form
+            });
+            const fileData = await uploadRes.json();
+            
+            if (fileData.id) {
+                alert('Successfully exported! Check your Google Docs.');
+            } else {
+                throw new Error("Failed to export.");
+            }
+        } catch (e) {
+            console.error("Docs export error:", e);
+            alert("Export failed. Please try again.");
+        }
+    };
+
+    const exportToGoogleDriveHTML = async () => {
+        if (!creation) return;
+        const token = await getAccessToken();
+        if (!token) {
+            alert("Please sign in to Google to export to Drive.");
+            return;
+        }
+
+        const confirmed = window.confirm("Are you sure you want to export this HTML file to Google Drive?");
+        if (!confirmed) return;
+
+        try {
+            const metadata = {
+                name: creation.name + '.html',
+                mimeType: 'text/html'
+            };
+            
+            const fileContent = new Blob([creation.html], {type: 'text/html'});
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
+            form.append('file', fileContent);
+            
+            const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: form
+            });
+            const fileData = await uploadRes.json();
+            
+            if (fileData.id) {
+                alert('Successfully exported to Google Drive!');
+            } else {
+                throw new Error("Failed to export.");
+            }
+        } catch (e) {
+            console.error("Drive export error:", e);
+            alert("Export failed. Please try again.");
+        }
+    };
+
   return (
     <div
       className={`
@@ -187,7 +272,7 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ creation, isLoading, i
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center justify-end space-x-1 w-32">
+        <div className="flex items-center justify-end space-x-1 w-48">
             {!isLoading && creation && (
                 <>
                     {creation.originalImage && (
@@ -199,6 +284,26 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ creation, isLoading, i
                             <ViewColumnsIcon className="w-4 h-4" />
                         </button>
                     )}
+
+                    <button 
+                        onClick={exportToGoogleDocs}
+                        title="Export to Google Docs"
+                        className="text-zinc-500 hover:text-zinc-300 transition-colors p-1.5 rounded-md hover:bg-zinc-800"
+                    >
+                        <DocumentTextIcon className="w-4 h-4" />
+                    </button>
+
+                    <button 
+                        onClick={exportToGoogleDriveHTML}
+                        title="Export to Google Drive"
+                        className="text-zinc-500 hover:text-zinc-300 transition-colors p-1.5 rounded-md hover:bg-zinc-800"
+                    >
+                        <svg className="w-4 h-4" viewBox="0 0 87.3 127.3">
+                            <path d="M59.1 82.5H28.2l-14.1-24.5L28.2 33.5h30.9l14.1 24.5L59.1 82.5z" fill="#FFC107"/>
+                            <path d="M59.1 82.5l14.1-24.5L59.1 33.5h-15l14.1 24.5-14.1 24.5h15z" fill="#1976D2"/>
+                            <path d="M28.2 82.5l-14.1-24.5L28.2 33.5h15L29.1 58l14.1 24.5h-15z" fill="#4CAF50"/>
+                        </svg>
+                    </button>
 
                     <button 
                         onClick={handleExport}
